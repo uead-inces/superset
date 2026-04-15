@@ -96,6 +96,7 @@ import isDashboardLoading from '../../util/isDashboardLoading';
 import { useChartIds } from '../../util/charts/useChartIds';
 import { useDashboardMetadataBar } from './useDashboardMetadataBar';
 import { useHeaderActionsMenu } from './useHeaderActionsDropdownMenu';
+import { addQueryEditor } from 'src/SqlLab/actions/sqlLab';
 
 const extensionsRegistry = getExtensionsRegistry();
 
@@ -182,6 +183,10 @@ const Header = () => {
   const user = useSelector(state => state.user);
   const chartIds = useChartIds();
 
+  // INCES vairables para la obtencion de los datos de que forman los graficos
+  const allChartsState = useSelector(state => state.charts);
+
+
   const {
     expandedSlices,
     refreshFrequency,
@@ -219,7 +224,16 @@ const Header = () => {
   const ctrlYTimeout = useRef(0);
   const ctrlZTimeout = useRef(0);
   const previousThemeRef = useRef(dashboardInfo.theme);
+//INCES se obtiene el parametro desde el json
+  const metadataString = dashboardInfo?.json_metadata || dashboardInfo?.jsonMetadata || '{}';
+let showAnalysisButton = false;
 
+try {
+  const parsedMetadata = JSON.parse(metadataString);
+  showAnalysisButton = parsedMetadata.show_analysis_button === true;
+} catch (e) {
+  console.error("Error en metadatos del dashboard", e);
+}
   const dashboardTitle = layout[DASHBOARD_HEADER_ID]?.meta?.text;
   const { slug } = dashboardInfo;
   const actualLastModifiedTime = Math.max(
@@ -621,9 +635,73 @@ const Header = () => {
     ],
   );
 
+// INCES: se crea una funcion para manejar los datos de los charts del dashboard
+const handleGenerateAnalysis = useCallback(() => {
+  const dashboardData = chartIds.map(id => {
+    const chart = allChartsState[id];
+    
+    // Accedemos al primer resultado del query
+    const queryResult = chart?.queriesResponse?.[0] || {};
+    
+    return {
+      chart_id: id,
+      titulo: chart?.formData?.slice_name || "Sin título",
+      tipo_grafico: chart?.formData?.viz_type,
+      query_sql: queryResult.query,
+      columnas: queryResult.colnames || [],
+      // Intentamos obtener .data o .result_data por si cambia la version de Superset
+      data_filas: queryResult.data || queryResult.result_data || [], 
+      configuracion: chart?.formData || {}
+    };
+  });
+
+  // Validamos si hay data real
+  const totalFilas = dashboardData.reduce((acc, curr) => acc + (curr.data_filas?.length || 0), 0);
+  
+  // Debug para ti en la consola
+  console.log("Análisis INCES - Total filas capturadas:", totalFilas);
+
+  if (totalFilas === 0) {
+    boundActionCreators.addWarningToast(
+      "Los gráficos aún se están cargando o no tienen datos disponibles en este momento."
+    );
+    return;
+  }
+
+  createFileDemo(dashboardData);
+}, [chartIds, allChartsState, boundActionCreators]);
+
+const createFileDemo= (data) => {
+  const jsonChart = JSON.stringify(data, null, 2);
+  console.log(jsonChart);
+  const blob = new Blob([jsonChart], {type:  'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  link.download = `analisis_inces_${timestamp}.txt`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+
+
   const rightPanelAdditionalItems = useMemo(
     () => (
       <div className="button-container">
+      {/* BOTÓN DE ANÁLISIS ESTRATÉGICO */}
+      {showAnalysisButton && (
+        <Button
+          buttonStyle="warning"
+          buttonSize="small"
+          onClick={handleGenerateAnalysis}  //alert(JSON.stringify(charts))}
+          style={{ marginRight: '8px' }}
+        >
+          Generar Análisis
+        </Button>
+      )}
         {userCanSaveAs && (
           <div className="button-container" data-test="dashboard-edit-actions">
             {editMode && (
@@ -739,6 +817,8 @@ const Header = () => {
       undoLength,
       userCanEdit,
       userCanSaveAs,
+      showAnalysisButton,
+      handleGenerateAnalysis,
     ],
   );
 
