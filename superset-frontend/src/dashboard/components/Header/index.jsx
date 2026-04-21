@@ -97,6 +97,8 @@ import { useChartIds } from '../../util/charts/useChartIds';
 import { useDashboardMetadataBar } from './useDashboardMetadataBar';
 import { useHeaderActionsMenu } from './useHeaderActionsDropdownMenu';
 import { addQueryEditor } from 'src/SqlLab/actions/sqlLab';
+import { cleanDashboardJson } from 'src/utils/utilsInces';
+import { jsPDF } from 'jspdf';
 
 const extensionsRegistry = getExtensionsRegistry();
 
@@ -672,8 +674,21 @@ const handleGenerateAnalysis = useCallback(() => {
 }, [chartIds, allChartsState, boundActionCreators]);
 
 const createFileDemo= (data) => {
-  const jsonChart = JSON.stringify(data, null, 2);
-  console.log(jsonChart);
+  const jsonChart = cleanDashboardJson (data); //JSON.stringify(data, null, 2);
+  const doc= new jsPDF();
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  doc.setFont("helvetica", "bold");
+  doc.text("Análisis de Datos Estratégicos - INCES", 10, 20);
+  
+  doc.setFont("courier", "normal");
+  doc.setFontSize(10);
+  
+  const textLines = doc.splitTextToSize(jsonChart, 180);
+  doc.text(textLines, 10, 30);
+
+  doc.save(`reporte_uead_${timestamp}.pdf`);
+
+  /*
   const blob = new Blob([jsonChart], {type:  'text/plain'});
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -684,6 +699,7 @@ const createFileDemo= (data) => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+  */
 };
 
 
