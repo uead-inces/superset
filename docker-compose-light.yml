@@ -88,17 +88,20 @@ services:
     image: postgres:16
     restart: unless-stopped
     volumes:
-      - db_home_light:/var/lib/postgresql/data
+      - ./db_data:/var/lib/postgresql/data
       - ./docker/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
     environment:
       # Override database name to avoid conflicts
       POSTGRES_DB: superset_light
     # Increase max connections for test runs
-    command: postgres -c max_connections=50
+    # Quitamos el synchronous_commit=on para que no se pause
+    command: postgres -c wal_level=logical -c max_connections=50
     deploy: 
       resources:
         limits:
           memory: 512M
+    ports:
+      - 5433:5432
 
   superset-light:
     env_file:
